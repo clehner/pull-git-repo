@@ -327,12 +327,21 @@ R.getCommit = function (ref, cb) {
 
 R.readLog = function (head) {
   var self = this
-  return function (end, cb) {
-    self.getRef(head, function (err, object) {
-      if (err) return cb(err)
-      readCommitOrTagProperty(object, 'parent', function (err, hash) {
-        cb(err, head = hash)
+  var object, ended
+  return function read(end, cb) {
+    if (ended) return cb(ended)
+    if (!head) return cb(true)
+    if (!object)
+      self.getRef(head, function (err, obj, hash) {
+        object = obj
+        cb(ended = err, head = hash)
       })
-    })
+    else
+      readCommitOrTagProperty(object, 'parent', function (err, hash) {
+        object = null
+        head = hash
+        if (ended = err) cb(err)
+        else read(null, cb)
+      })
   }
 }
