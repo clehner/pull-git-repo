@@ -1,0 +1,29 @@
+{
+  "name": "pull-git-repo",
+  "version": "0.1.0",
+  "description": "utility methods for git repos using pull streams",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/clehner/pull-git-repo.git"
+  },
+  "keywords": [
+    "pull-git-repo"
+  ],
+  "author": "Charles Lehner (http://celehner.com/)",
+  "license": "Fair",
+  "bugs": {
+    "url": "https://github.com/clehner/pull-git-repo/issues"
+  },
+  "dependencies": {
+    "pull-buffered": "^0.3.0"
+  },
+  "devDependencies": {
+    "abstract-pull-git-repo": "^0.3.0",
+    "pull-stream": "^3.1.0",
+    "tape": "^4.4.0"
+  }
+}
