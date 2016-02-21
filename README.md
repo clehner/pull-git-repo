@@ -51,13 +51,13 @@ Stream commit IDs of the repo, following the commit history backwards
 
 Get the hash that a ref points to. Errors if the ref is not found.
 
-#### `repo.getRef(name, cb(err, object))`
+#### `repo.getRef(name, cb(err, object, id))`
 
 Get a git object
 
 - `name`: name of a ref pointing to the object, or SHA1 of the object
 
-#### `repo.getCommit(rev, cb(err, object))`
+#### `repo.getCommit(rev, cb(err, object, id))`
 
 Get a commit object. If the object refered to by `rev` is a tag, get the commit
 that it points to.

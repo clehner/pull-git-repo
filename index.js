@@ -138,7 +138,9 @@ R.resolveRef = function (name, cb) {
 R.getRef = function (name, cb) {
   this.resolveRef(name, function (err, hash) {
     if (err) return cb(err)
-    this.getObject(hash, cb)
+    this.getObject(hash, function (err, object) {
+      cb(err, object, hash)
+    })
   }.bind(this))
 }
 
@@ -202,11 +204,11 @@ R.getCommitParsed = function (ref, cb) {
 
 R.getTree = function (ref, cb) {
   var self = this
-  this.getRef(ref, function gotRef(err, object) {
+  this.getRef(ref, function gotRef(err, object, hash) {
     if (err) return cb(err)
     switch (object.type) {
       case 'tree':
-        return cb(null, object)
+        return cb(null, object, hash)
       case 'commit':
         return readCommitOrTagProperty(object, 'tree', function (err, hash) {
           if (err) return cb(err)
@@ -307,16 +309,15 @@ R.getFile = function (branch, path, cb) {
 
 R.getCommit = function (ref, cb) {
   var self = this
-  this.getRef(ref, function gotRef(err, object) {
+  this.getRef(ref, function gotRef(err, object, hash) {
     if (err) return cb(err)
     switch (object.type) {
       case 'commit':
-        return cb(null, object, ref)
+        return cb(null, object, hash)
       case 'tag':
         return readCommitOrTagProperty(object, 'object', function (err, hash) {
           if (err) return cb(err)
-          ref = hash
-          self.getRef(hash, cb)
+          self.getRef(hash, gotRef)
         })
       default:
         return cb(new Error('Expected commit, got ' + object.type))
