@@ -116,7 +116,7 @@ R.isCommitHash = function (str) {
 
 R.resolveRef = function (name, cb) {
   if (!name)
-    return cb(new Error('Invalid name'))
+    return cb(new Error('Invalid name \'' + name + '\''))
 
   if (this.isCommitHash(name))
     return cb(null, name)
@@ -256,28 +256,30 @@ R.readTree = function (hash) {
 
 R.readDir = function (rev, path) {
   var readTree = this.readTree(rev)
-
-  if (path.length === 0 || path === '/')
-    return readTree
-
-  path = (typeof path == 'string') ? path.split(/\/+/) : path.slice()
-
   var self = this
-  return readNext(function (cb) {
-    readTree(null, function next(err, file) {
-      if (err) return cb(err)
-      if (file.name !== path[0])
-        return readTree(null, next)
-      if (file.mode !== '040000')
-        return cb(new Error('Bad path'))
-      // cancel reading current tree
-      readTree(true, function (err) {
+  path = (typeof path == 'string') ? path.split(/\/+/) : path.slice()
+  return readNext(function next(cb) {
+    if (path.length === 0) {
+      // this is the directory the caller wants to read
+      return cb(null, readTree)
+    }
+
+    // find the next file in the path
+    pull(
+      readTree,
+      pull.filter(function (file) {
+        return file.name === path[0] && file.mode == '40000'
+      }),
+      pull.take(1),
+      pull.collect(function (err, files) {
         if (err) return cb(err)
+        var file = files[0]
+        if (!file) return cb(new Error('File \'' + path[0] + '\' not found'))
         path.shift()
-        // start reading tree of found file
-        readTree = self.readTree(file.hash)
+        readTree = self.readTree(file.id)
+        next(cb)
       })
-    })
+    )
   })
 }
 
