@@ -281,7 +281,7 @@ R.readDir = function (rev, path) {
   })
 }
 
-R.getFile = function (branch, path, cb) {
+R.getFile = function (rev, path, cb) {
   var self = this
   path = (typeof path == 'string') ? path.split(/\/+/) : path.slice()
   var filename = path.pop()
