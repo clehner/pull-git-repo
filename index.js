@@ -60,6 +60,8 @@ function parseCommitOrTag(object, id) {
           body += data.toString('utf8')
           cb(null, {name: 'body', value: body})
         })
+      case 'end':
+        return cb(true)
       case 'fields':
         return b.lines(end, function (err, line) {
           if (err) return cb(err)
@@ -103,7 +105,7 @@ function parseCommitOrTag(object, id) {
           }
         })
       default:
-        return cb(state)
+        return cb(new Error('Bad state: ' + state))
     }
   }
 }
