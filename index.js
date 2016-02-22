@@ -246,7 +246,7 @@ R.readTree = function (hash) {
         var s = split2(fileInfo)
         cb(null, {
           id: hash.toString('hex'),
-          mode: s[0],
+          mode: parseInt(s[0], 8),
           name: s[1]
         })
       })
@@ -268,7 +268,7 @@ R.readDir = function (rev, path) {
     pull(
       readTree,
       pull.filter(function (file) {
-        return file.name === path[0] && file.mode == '40000'
+        return file.name === path[0] && file.mode == 040000
       }),
       pull.take(1),
       pull.collect(function (err, files) {
@@ -304,7 +304,7 @@ R.getFile = function (rev, path, cb) {
         cb(null, {
           length: object.length,
           read: object.read,
-          mode: file.mode
+          mode: parseInt(file.mode, 8)
         })
       })
     })
