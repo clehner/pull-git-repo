@@ -1,12 +1,25 @@
 var buffered = require('pull-buffered')
 var pull = require('pull-stream')
 var util = require('util')
+var toPull = require('stream-to-pull-stream')
+var packidx = require('git-packidx-parser')
+var pack = require('pull-git-pack')
+var createGitHash = require('pull-hash/ext/git')
+var asyncMemo = require('asyncmemo')
+var multicb = require('multicb')
 
 var R = {}
 
 module.exports = function (repo) {
   for (var k in R)
     repo[k] = R[k]
+  repo.getPackIndexCached = asyncMemo(R.getPackIndexParsed)
+  repo.unpackPackCached = asyncMemo(R.unpackPack)
+  repo._cachedObjects = {}
+
+  if (!repo.packs)
+    repo.packs = pull.empty
+
   return repo
 }
 
@@ -140,7 +153,7 @@ R.resolveRef = function (name, cb) {
 R.getRef = function (name, cb) {
   this.resolveRef(name, function (err, hash) {
     if (err) return cb(err)
-    this.getObject(hash, function (err, object) {
+    this.getObjectFromAny(hash, function (err, object) {
       cb(err, object, hash)
     })
   }.bind(this))
@@ -299,7 +312,7 @@ R.getFile = function (rev, path, cb) {
       var file = files[0]
       if (!file)
         return cb(new Error('File not found'))
-      self.getObject(file.id, function (err, object) {
+      self.getObjectFromAny(file.id, function (err, object) {
         if (err) return cb(err)
         cb(null, {
           length: object.length,
@@ -348,4 +361,98 @@ R.readLog = function (head) {
         else read(null, cb)
       })
   }
+}
+
+R.getPackIndexParsed = function (id, cb) {
+  this.getPackIndex(id, function (err, read) {
+    if (err) return cb(err)
+    var s = packidx()
+    s.on('error', cb)
+    s.on('data', function (idx) { cb(null, idx) })
+    pull(read, toPull.sink(s))
+  })
+}
+
+R.findPackedObject = function (hash, cb) {
+  var self = this
+  var id = new Buffer(hash, 'hex')
+  var read = this.packs()
+  read(null, function next(end, pack) {
+    if (end) return cb(new Error('Object ' + hash + ' not found in pack'))
+    self.getPackIndexCached(pack.idxId, function (err, idx) {
+      if (err) return cb(err)
+      var offset = idx.find(id)
+      if (!offset) return read(null, next)
+      read(true, function (err) {
+        if (err && err !== true) return cb(err)
+        offset.packId = pack.packId
+        cb(null, offset)
+      })
+    })
+  })
+}
+
+function expandObject(obj) {
+  return {
+    type: obj.type,
+    length: obj.length,
+    read: pull.values(obj.bufs)
+  }
+}
+
+R.getObjectFromPack = function (hash, cb) {
+  var self = this
+  var obj = self._cachedObjects[hash]
+  if (obj) return cb(null, expandObject(obj))
+  this.findPackedObject(hash, function (err, offset) {
+    if (err) return cb(err)
+    obj = self._cachedObjects[hash]
+    if (obj) return cb(null, expandObject(obj))
+    self.unpackPackCached(offset.packId, function (err) {
+      if (err) return cb(err)
+      var obj = self._cachedObjects[hash]
+      if (!obj) return cb(new Error('Object ' + hash + ' was not in the pack'))
+      cb(null, expandObject(obj))
+    })
+  })
+}
+
+R.unpackPack = function (packId, _cb) {
+  var self = this
+  var objs = this._cachedObjects
+  var onEnd = multicb()
+  var cb = onEnd()
+  onEnd(_cb)
+  this.getPackfile(packId, function (err, packfile) {
+    if (err) return cb(err)
+    var readObject = pack.decode(null, self, onEnd(), packfile)
+    readObject(null, function next(err, obj) {
+      if (err === true) return cb()
+      if (err) return cb(err)
+      var done = multicb({ pluck: 1, spread: true })
+      pull(
+        obj.read,
+        createGitHash(obj, done()),
+        pull.collect(done())
+      )
+      done(function (err, hash, bufs) {
+        if (err) cb(err)
+        objs[hash] = {
+          type: obj.type,
+          length: obj.length,
+          bufs: bufs
+        }
+        readObject(null, next)
+      })
+    })
+  })
+}
+
+R.getObjectFromAny = function (hash, cb) {
+  this.getObject(hash, function (err, obj) {
+    if (obj)
+      cb(null, obj)
+    else
+      this.getObjectFromPack(hash, cb)
+  }.bind(this))
 }
