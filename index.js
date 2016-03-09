@@ -7,6 +7,7 @@ var pack = require('pull-git-pack')
 var createGitHash = require('pull-hash/ext/git')
 var asyncMemo = require('asyncmemo')
 var multicb = require('multicb')
+var cache = require('pull-cache')
 
 var R = {}
 
@@ -14,8 +15,8 @@ module.exports = function (repo) {
   for (var k in R)
     repo[k] = R[k]
   repo.getPackIndexCached = asyncMemo(R.getPackIndexParsed)
-  repo.unpackPackCached = asyncMemo(R.unpackPack)
   repo._cachedObjects = {}
+  repo._unpackedObjects = {}
 
   if (!repo.packs)
     repo.packs = pull.empty
@@ -401,50 +402,68 @@ function expandObject(obj) {
 }
 
 R.getObjectFromPack = function (hash, cb) {
-  var self = this
-  var obj = self._cachedObjects[hash]
+  var obj = this._cachedObjects[hash]
   if (obj) return cb(null, expandObject(obj))
+  var self = this
+  console.error('get object from pack', hash)
   this.findPackedObject(hash, function (err, offset) {
     if (err) return cb(err)
-    obj = self._cachedObjects[hash]
-    if (obj) return cb(null, expandObject(obj))
-    self.unpackPackCached(offset.packId, function (err) {
+    console.error('found object offset', offset)
+    self.unpackPack(offset.packId, function (err, objects) {
+      console.error('unpacked', err)
       if (err) return cb(err)
-      var obj = self._cachedObjects[hash]
-      if (!obj) return cb(new Error('Object ' + hash + ' was not in the pack'))
-      cb(null, expandObject(obj))
+      pull(
+        objects,
+        pull.filter(function (obj) {
+          console.error('filter', obj.sha1, hash)
+          return obj.sha1 == hash
+        }),
+        pull.take(1),
+        pull.collect(function (err, objs) {
+          if (err) return cb(err)
+          var obj = objs[0]
+          if (!obj)
+            return cb(new Error('Object ' + hash + ' was not in the pack'))
+          console.error('unpacked obj', obj)
+          cb(null, expandObject(obj))
+        })
+      )
     })
   })
 }
 
 R.unpackPack = function (packId, _cb) {
+  var cachedSource = this._unpackedObjects[packId]
+  if (cachedSource) return _cb(null, cachedSource())
   var self = this
-  var objs = this._cachedObjects
   var onEnd = multicb()
   var cb = onEnd()
   onEnd(_cb)
   this.getPackfile(packId, function (err, packfile) {
     if (err) return cb(err)
-    var readObject = pack.decode(null, self, onEnd(), packfile)
-    readObject(null, function next(err, obj) {
-      if (err === true) return cb()
-      if (err) return cb(err)
-      var done = multicb({ pluck: 1, spread: true })
-      pull(
-        obj.read,
-        createGitHash(obj, done()),
-        pull.collect(done())
-      )
-      done(function (err, hash, bufs) {
-        if (err) cb(err)
-        objs[hash] = {
-          type: obj.type,
-          length: obj.length,
-          bufs: bufs
-        }
-        readObject(null, next)
+    var source = pull(
+      pack.decode(null, self, onEnd(), packfile),
+      pull.asyncMap(function (obj, mapCb) {
+        var done = multicb({ pluck: 1, spread: true })
+        pull(
+          obj.read,
+          createGitHash(obj, done()),
+          pull.collect(done())
+        )
+        done(function (err, hash, bufs) {
+          if (err) mapCb(err)
+          console.error('read object')
+          mapCb(null, self._cachedObjects[hash] = {
+            type: obj.type,
+            length: obj.length,
+            sha1: hash,
+            bufs: bufs
+          })
+        })
       })
-    })
+    )
+    cachedSource = self._unpackedObjects[packId] = cache(source)
+    _cb(null, cachedSource())
   })
 }
 
