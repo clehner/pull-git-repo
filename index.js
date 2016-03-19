@@ -15,6 +15,7 @@ module.exports = function (repo) {
   for (var k in R)
     repo[k] = R[k]
   repo.getPackIndexCached = asyncMemo(R.getPackIndexParsed)
+  repo.getPackfileCached = asyncMemo(R.getPackfileBufs)
   repo._cachedObjects = {}
   repo._unpackedObjects = {}
 
@@ -57,6 +58,36 @@ function buffer(read, cb) {
       cb(err, bufs && Buffer.concat(bufs))
     })
   )
+}
+
+function sliceBufs(bufs, start, len) {
+  var outBufs = []
+  for (var i = 0; i < bufs.length; i++) {
+    var buf = bufs[i]
+    if (start >= buf.length) {
+      start -= buf.length
+    } else if (start === 0) {
+      if (buf.length > len) {
+        outBufs.push(buf)
+        len -= buf.length
+      } else if (buf.length === len) {
+        outBufs.push(buf)
+        break
+      } else {
+        outBufs.push(buf.slice(0, len))
+        break
+      }
+    } else {
+      var sliceLen = Math.min(len, buf.length - start)
+      outBufs.push(buf.slice(start, start + sliceLen))
+      start = 0
+      len -= sliceLen
+      // console.error('sliceLen', sliceLen, start, buf.length)
+      if (len === 0)
+        break
+    }
+    return outBufs
+  }
 }
 
 function parseCommitOrTag(object, id) {
@@ -383,7 +414,9 @@ R.findPackedObject = function (hash, cb) {
     self.getPackIndexCached(pack.idxId, function (err, idx) {
       if (err) return cb(err)
       var offset = idx.find(id)
+      console.error('offset', offset)
       if (!offset) return read(null, next)
+      console.error('pack idx id', pack.idxId)
       read(true, function (err) {
         if (err && err !== true) return cb(err)
         offset.packId = pack.packId
@@ -408,27 +441,31 @@ R.getObjectFromPack = function (hash, cb) {
   console.error('get object from pack', hash)
   this.findPackedObject(hash, function (err, offset) {
     if (err) return cb(err)
-    console.error('found object offset', offset)
-    self.unpackPack(offset.packId, function (err, objects) {
-      console.error('unpacked', err)
+    console.error('found object offset', offset.offset.toString(16),
+      offset.next ? offset.next.toString(16) : 'end', offset.packId)
+    self.getPackfileCached(offset.packId, function (err, bufs) {
       if (err) return cb(err)
+      console.error('unpacked', err, bufs.length, bufs[0] && bufs[0].length)
+      // bufs = sliceBufs(bufs, offset.offset, offset.next - offset.offset)
+      bufs = Buffer.concat(bufs)
+      bufs = [bufs.slice(offset.offset, offset.next || bufs.length)]
+      console.error('bufs', bufs, bufs && bufs[0] && bufs[0].length)
       pull(
-        objects,
-        pull.filter(function (obj) {
-          console.error('filter', obj.sha1, hash)
-          return obj.sha1 == hash
-        }),
-        pull.take(1),
-        pull.collect(function (err, objs) {
-          if (err) return cb(err)
-          var obj = objs[0]
-          if (!obj)
-            return cb(new Error('Object ' + hash + ' was not in the pack'))
-          console.error('unpacked obj', obj)
-          cb(null, expandObject(obj))
+        pull.values(bufs),
+        pack.decodeObject({verbosity: 3}, self, function (err, obj) {
+          console.error('DECODED OBJ', err, obj)
+          if (obj && obj.length > 100000) return cb(new Error('Bad object'))
+          cb(err, obj)
         })
       )
     })
+  })
+}
+
+R.getPackfileBufs = function (packId, cb) {
+  this.getPackfile(packId, function (err, packfile) {
+    if (err) return cb(err)
+    pull(packfile, pull.collect(cb))
   })
 }
 
