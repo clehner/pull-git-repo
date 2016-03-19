@@ -188,7 +188,7 @@ function readCommitOrTagProperty(object, property, cb) {
     if (!line) return readLine(true, cb)
     var s = split2(line)
     if (s[0] === property) {
-      object.read(true, function (err) {
+      b.passthrough(true, function (err) {
         cb(err === true ? null : err, s[1])
       })
     } else {
