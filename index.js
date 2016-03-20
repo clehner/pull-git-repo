@@ -86,7 +86,6 @@ function sliceBufs(bufs, start, len) {
       outBufs.push(buf.slice(start, start + sliceLen))
       start = 0
       len -= sliceLen
-      // console.error('sliceLen', sliceLen, start, buf.length)
       if (len === 0)
         break
     }
@@ -418,9 +417,7 @@ R.findPackedObject = function (hash, cb) {
     self.getPackIndexCached(pack.idxId, function (err, idx) {
       if (err) return cb(err)
       var offset = idx.find(id)
-      console.error('offset', offset)
       if (!offset) return read(null, next)
-      console.error('pack idx id', pack.idxId)
       read(true, function (err) {
         if (err && err !== true) return cb(err)
         offset.packId = pack.packId
@@ -442,23 +439,16 @@ R.getObjectFromPack = function (hash, cb) {
   var obj = this._cachedObjects[hash]
   if (obj) return cb(null, expandObject(obj))
   var self = this
-  console.error('get object from pack', hash)
   this.findPackedObject(hash, function (err, offset) {
     if (err) return cb(err)
-    console.error('found object offset', offset.offset.toString(16),
-      offset.next ? offset.next.toString(16) : 'end', offset.packId)
     self.getPackfileCached(offset.packId, function (err, bufs) {
       if (err) return cb(err)
-      console.error('unpacked', err, bufs.length, bufs[0] && bufs[0].length)
-      // bufs = sliceBufs(bufs, offset.offset, offset.next - offset.offset)
       bufs = Buffer.concat(bufs)
       bufs = [bufs.slice(offset.offset, offset.next || bufs.length)]
-      console.error('bufs', bufs, bufs && bufs[0] && bufs[0].length)
       pull(
         pull.values(bufs),
-        pack.decodeObject({verbosity: 3}, self, function (err, obj) {
+        pack.decodeObject({verbosity: 0}, self, function (err, obj) {
           if (err) return cb(err)
-          console.error('DECODED OBJ', err, obj)
           if (obj && obj.length > 100000) return cb(new Error('Bad object'))
           pull(obj.read, pull.collect(function (err, objBufs) {
             if (err) return cb(err)
@@ -502,7 +492,6 @@ R.unpackPack = function (packId, _cb) {
         )
         done(function (err, hash, bufs) {
           if (err) mapCb(err)
-          console.error('read object')
           mapCb(null, self._cachedObjects[hash] = {
             type: obj.type,
             length: obj.length,
