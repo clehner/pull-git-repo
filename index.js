@@ -11,7 +11,11 @@ var cache = require('pull-cache')
 
 var R = {}
 
-module.exports = function (repo) {
+module.exports = function Repo(repo) {
+  if (repo._Repo == Repo)
+    return repo
+  repo._Repo = Repo
+
   for (var k in R)
     repo[k] = R[k]
   repo.getPackIndexCached = asyncMemo(R.getPackIndexParsed)
@@ -453,9 +457,18 @@ R.getObjectFromPack = function (hash, cb) {
       pull(
         pull.values(bufs),
         pack.decodeObject({verbosity: 3}, self, function (err, obj) {
+          if (err) return cb(err)
           console.error('DECODED OBJ', err, obj)
           if (obj && obj.length > 100000) return cb(new Error('Bad object'))
-          cb(err, obj)
+          pull(obj.read, pull.collect(function (err, objBufs) {
+            if (err) return cb(err)
+            cb(null, expandObject(self._cachedObjects[hash] = {
+              type: obj.type,
+              length: obj.length,
+              sha1: hash,
+              bufs: objBufs
+            }))
+          }))
         })
       )
     })
