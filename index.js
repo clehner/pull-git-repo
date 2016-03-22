@@ -465,6 +465,14 @@ R.getObjectFromPack = function (hash, cb) {
   })
 }
 
+R.hasObjectFromPack = function (hash, cb) {
+  if (hash in this._cachedObjects) return cb(null, true)
+  var self = this
+  this.findPackedObject(hash, function (err, offset) {
+    cb(err, !!offset)
+  })
+}
+
 R.getPackfileBufs = function (packId, cb) {
   this.getPackfile(packId, function (err, packfile) {
     if (err) return cb(err)
@@ -512,5 +520,14 @@ R.getObjectFromAny = function (hash, cb) {
       cb(null, obj)
     else
       this.getObjectFromPack(hash, cb)
+  }.bind(this))
+}
+
+R.hasObjectFromAny = function (hash, cb) {
+  this.hasObject(hash, function (err, has) {
+    if (has)
+      cb(null, true)
+    else
+      this.hasObjectFromPack(hash, cb)
   }.bind(this))
 }
