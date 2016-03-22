@@ -169,19 +169,18 @@ R.resolveRef = function (name, cb) {
   if (this.isCommitHash(name))
     return cb(null, name)
 
-  if (name.indexOf('/') === -1)
-    name = 'refs/heads/' + name
-
   var readRef = this.refs()
   readRef(null, function next(end, ref) {
     if (end)
       cb(new NotFoundError('Ref \'' + name + '\' not found'))
-    else if (ref.name !== name)
-      readRef(null, next)
-    else
+    else if (ref.name === name
+        || ref.name === 'refs/heads/' + name
+        || ref.name === 'refs/tags/' + name)
       readRef(true, function (err) {
         cb(err === true ? null : err, ref.hash)
       })
+    else
+      readRef(null, next)
   })
 }
 
@@ -261,6 +260,11 @@ R.getTree = function (ref, cb) {
         return cb(null, object, hash)
       case 'commit':
         return readCommitOrTagProperty(object, 'tree', function (err, hash) {
+          if (err) return cb(err)
+          self.getRef(hash, gotRef)
+        })
+      case 'tag':
+        return readCommitOrTagProperty(object, 'object', function (err, hash) {
           if (err) return cb(err)
           self.getRef(hash, gotRef)
         })

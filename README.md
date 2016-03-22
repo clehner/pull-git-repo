@@ -55,7 +55,8 @@ Get the hash that a ref points to. Errors if the ref is not found.
 
 Get a git object
 
-- `name`: name of a ref pointing to the object, or SHA1 of the object
+- `name`: name of a branch, tag, or ref pointing to the object,
+  or SHA1 of the object
 
 #### `repo.getCommit(rev, cb(err, object, id))`
 
@@ -68,8 +69,8 @@ Get a tag object.
 
 #### `repo.getTree(rev, cb(err, object))`
 
-Get a tree object. If `rev` refers to a commit, get the tree that the
-commit refers to.
+Get a tree object. If `rev` refers to a commit or tag, get the tree that it
+points to.
 
 #### `repo.getCommitParsed(rev, cb(err, commit))`
 
