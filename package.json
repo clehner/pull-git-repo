@@ -1,6 +1,6 @@
 {
   "name": "pull-git-repo",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "utility methods for git repos using pull streams",
   "main": "index.js",
   "scripts": {
