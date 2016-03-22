@@ -449,7 +449,6 @@ R.getObjectFromPack = function (hash, cb) {
         pull.values(bufs),
         pack.decodeObject({verbosity: 0}, self, function (err, obj) {
           if (err) return cb(err)
-          if (obj && obj.length > 100000) return cb(new Error('Bad object'))
           pull(obj.read, pull.collect(function (err, objBufs) {
             if (err) return cb(err)
             cb(null, expandObject(self._cachedObjects[hash] = {
