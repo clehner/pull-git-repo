@@ -11,6 +11,11 @@ Below, `source(obj)` means returns a [readable stream][pull-stream] for objects 
 
 Mixin `pull-git-repo` methods into `repo`
 
+#### `Repo.parseCommitOrTag(object, id): source({name, value})`
+
+Read a git object and transform it into a stream of `{name, value}` properties,
+as in `repo.readCommit` or `repo.readTag`.
+
 #### `repo.getRefNames([pretty, ]cb(err, refs))
 
 Get a repo's refs as an object.
@@ -80,7 +85,12 @@ Get a tag object.
 Get a tree object. If `rev` refers to a commit or tag, get the tree that it
 points to.
 
-#### `repo.getCommitParsed(rev, cb(err, commit))`
+#### `Repo.getCommitParsed(object, cb(err, commit))`
+
+Read a commit object and parse it into a JSON object, as in
+`repo.getCommitParsed`.
+
+#### `repo.getCommitParsed(rev[, hash], cb(err, commit))`
 
 Get a commit buffered and parsed into a JSON object
 

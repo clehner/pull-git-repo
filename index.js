@@ -11,7 +11,8 @@ var cache = require('pull-cache')
 
 var R = {}
 
-module.exports = function Repo(repo) {
+module.exports = Repo
+function Repo(repo) {
   if (repo._Repo == Repo)
     return repo
   repo._Repo = Repo
@@ -119,21 +120,30 @@ R.getRefNames = function (pretty, cb) {
   )
 }
 
-function parseCommitOrTag(object, id) {
-  var body = '', state = 'begin'
-  var b = buffered(object.read)
+Repo.parseCommitOrTag = function (object) {
+  var body = '', state = 'fields'
+  var done = multicb({ pluck: 1, spread: true })
+  var b = pull(
+    object.read,
+    createGitHash(object, done()),
+    buffered
+  )
+  var onReadEnd = done()
+  done(function (err, hash, cb) {
+    return cb(err, {name: 'id', value: hash})
+  })
   return function read(end, cb) {
     switch (state) {
-      case 'begin':
-        state = 'fields'
-        return cb(null, {name: 'id', value: id})
       case 'body':
-        state = 'end'
+        state = 'id'
         return buffer(b.passthrough, function (err, data) {
           if (err) return cb(err)
           body += data.toString('utf8')
           cb(null, {name: 'body', value: body})
         })
+      case 'id':
+        state = 'end'
+        return onReadEnd(null, cb)
       case 'end':
         return cb(true)
       case 'fields':
@@ -170,6 +180,10 @@ function parseCommitOrTag(object, id) {
       case 'newline':
         state = 'body'
         return b.lines(end, function (err, line) {
+          if (err === true) {
+            state = 'end'
+            return onReadEnd(null, cb)
+          }
           if (err) return cb(err)
           if (line === '') {
             read(end, cb)
@@ -222,9 +236,9 @@ R.getRef = function (name, cb) {
 R.readCommit = function (rev) {
   var self = this
   return readNext(function (cb) {
-    self.getCommit(rev, function (err, object, hash) {
+    self.getCommit(rev, function (err, object) {
       if (err) return cb(err)
-      cb(null, parseCommitOrTag(object, hash))
+      cb(null, Repo.parseCommitOrTag(object))
     })
   })
 }
@@ -232,9 +246,9 @@ R.readCommit = function (rev) {
 R.readTag = function (rev) {
   var self = this
   return readNext(function (cb) {
-    self.getCommit(rev, function (err, object, hash) {
+    self.getCommit(rev, function (err, object) {
       if (err) return cb(err)
-      cb(null, parseCommitOrTag(object, hash))
+      cb(null, Repo.parseCommitOrTag(object))
     })
   })
 }
@@ -256,15 +270,24 @@ function readCommitOrTagProperty(object, property, cb) {
   })
 }
 
-R.getCommitParsed = function (ref, cb) {
+R.getCommitParsed = function (rev, cb) {
+  this.getCommit(rev, function (err, object, hash) {
+    if (err) return cb(err)
+    Repo.getCommitParsed(object, hash, cb)
+  })
+}
+
+Repo.getCommitParsed = function (object, hash, cb) {
+  if (!cb && typeof hash == 'function')
+    cb = hash, hash = null
   var commit = {
     parents: [],
     author: {},
     committer: {},
     body: ''
   }
-  pull(
-    this.readCommit(ref),
+  return pull(
+    Repo.parseCommitOrTag(object),
     pull.drain(function (field) {
       if (field.name == 'parent')
         commit.parents.push(field.value)
