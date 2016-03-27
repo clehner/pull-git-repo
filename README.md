@@ -11,6 +11,14 @@ Below, `source(obj)` means returns a [readable stream][pull-stream] for objects 
 
 Mixin `pull-git-repo` methods into `repo`
 
+#### `repo.getRefNames([pretty, ]cb(err, refs))
+
+Get a repo's refs as an object.
+
+- `pretty`: format ref type/prefix nicely
+- `refs`: refs object, in format `{<type>: [name]}}`,
+  where `type` is e.g. "heads" (or "Branches" if option `pretty` is set)
+
 #### `repo.readCommit(rev): source({name, value})`
 
 Read a commit. Returns a readable stream of objects for fields in the

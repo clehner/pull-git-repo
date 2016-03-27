@@ -93,6 +93,32 @@ function sliceBufs(bufs, start, len) {
   }
 }
 
+var refLabels = {
+  heads: 'Branches',
+  tags: 'Tags'
+}
+
+R.getRefNames = function (pretty, cb) {
+  if (typeof pretty == 'function' && !cb)
+    cb = pretty, pretty = false
+  var refs = {}
+  pull(
+    this.refs(),
+    pull.drain(function (ref) {
+      var m = ref.name.match(/^refs\/([^\/]*)\/(.*)$/) || [,, ref.name]
+      var group = m[1]
+      var name = m[2]
+      if (pretty)
+        group = refLabels[group] || group
+      ;(refs[group] || (refs[group] = [])).push(name)
+    }, function (err) {
+      for (var group in refs)
+        refs[group].sort()
+      cb(err, refs)
+    })
+  )
+}
+
 function parseCommitOrTag(object, id) {
   var body = '', state = 'begin'
   var b = buffered(object.read)
