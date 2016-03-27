@@ -160,12 +160,13 @@ Repo.parseCommitOrTag = function (object) {
               case 'author':
               case 'committer':
               case 'tagger':
-                var m = value.match(/^(.*) <(.*)> (.*) (.*)$/) || [, value]
+                var m = value.match(/^((.*) <(.*)>) (.*) (.*)$/) || [, value]
                 value = {
                   str: value,
-                  name: m[1],
-                  email: m[2],
-                  date: new Date(m[3] * 1000)
+                  nameEmail: m[1],
+                  name: m[2],
+                  email: m[3],
+                  date: new Date(m[4] * 1000)
                 }
             }
             cb(null, {name: name, value: value})
@@ -294,7 +295,10 @@ Repo.getCommitParsed = function (object, hash, cb) {
       else
         commit[field.name] = field.value
     }, function (err) {
-      commit.separateAuthor = (commit.author.str !== commit.committer.str)
+      commit.separateAuthor =
+        (commit.author.nameEmail !== commit.committer.nameEmail)
+      commit.separateAuthorDate =
+        (+commit.author.date !== +commit.committer.date)
       cb(err, commit)
     })
   )

@@ -103,8 +103,10 @@ Get a commit buffered and parsed into a JSON object
   optional blank line
 - `commit.author`: `user` object for info about the commit author
 - `commit.committer`: `user` object for info about the committer
-- `commit.separateAuthor`: convenience value indicating `commit.author` and
-  `commit.committer` are different
+- `commit.separateAuthor`: convenience value indicating the user or email in
+  `commit.author` and `commit.committer` are different
+- `commit.separateAuthorDate`: convenience value indicating
+  `commit.author.date` and `commit.committer.date` are different
 
 Example:
 
